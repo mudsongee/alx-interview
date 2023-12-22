@@ -1,60 +1,50 @@
 #!/usr/bin/python3
-
+"""
+log parsing
+"""
 
 import sys
-import signal
-# Function to handle interrupt (CTRL+C)
+import re
 
 
-def signal_handler(signal, frame):
-    print_stats()
-    sys.exit(0)
-
-# Function to print statistics
-
-
-def print_stats():
-    print("File size: {}".format(total_size))
-    for code in sorted(status_codes.keys()):
-        print("{}: {}".format(code, status_codes[code]))
+def output(log: dict) -> None:
+    """
+    helper function to display stats
+    """
+    print("File size: {}".format(log["file_size"]))
+    for code in sorted(log["code_frequency"]):
+        if log["code_frequency"][code]:
+            print("{}: {}".format(code, log["code_frequency"][code]))
 
 
-# Initialize variables
-total_size = 0
-status_codes = {}
+if __name__ == "__main__":
+    regex = re.compile(
+    r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3} - \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d+\] "GET /projects/260 HTTP/1.1" (.{3}) (\d+)')  # nopep8
 
-# Set up signal handler for interrupt
-signal.signal(signal.SIGINT, signal_handler)
+    line_count = 0
+    log = {}
+    log["file_size"] = 0
+    log["code_frequency"] = {
+        str(code): 0 for code in [
+            200, 301, 400, 401, 403, 404, 405, 500]}
 
-try:
-    # Process input line by line
-    for i, line in enumerate(sys.stdin, 1):
-        try:
-            # Parse the input line
-            parts = line.split()
-            ip_address = parts[0]
-            status_code = int(parts[-2])
-            file_size = int(parts[-1])
+    try:
+        for line in sys.stdin:
+            line = line.strip()
+            match = regex.fullmatch(line)
+            if (match):
+                line_count += 1
+                code = match.group(1)
+                file_size = int(match.group(2))
 
-            # Update total file size
-            total_size += file_size
+                # File size
+                log["file_size"] += file_size
 
-            # Update status code count
-            if status_code in [200, 301, 400, 401, 403, 404, 405, 500]:
-                if status_code not in status_codes:
-                    status_codes[status_code] = 1
-                else:
-                    status_codes[status_code] += 1
+                # status code
+                if (code.isdecimal()):
+                    log["code_frequency"][code] += 1
 
-            # Print statistics every 10 lines
-            if i % 10 == 0:
-                print_stats()
-
-        except (ValueError, IndexError):
-            # Skip lines with incorrect format
-            continue
-
-except KeyboardInterrupt:
-    # Handle keyboard interrupt (CTRL+C)
-    print_stats()
-    sys.exit(0)
+                if (line_count % 10 == 0):
+                    output(log)
+    finally:
+        output(log)
